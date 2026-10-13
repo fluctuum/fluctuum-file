@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+           xmlns:mailappor="http://schemas.microsoft.com/office/mailappversionoverrides/1.0"
+           xsi:type="MailApp">
+  <Id>d74fccdf-7625-4c5c-af70-1c0dae0b5386</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>Fluctuum</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="Fluctuum File"/>
+  <Description DefaultValue="File emails into FCD project folders (07 Comms) and log them in the Correspondence list."/>
+  <IconUrl DefaultValue="https://fluctuum.github.io/fluctuum-file/assets/icon-64.png"/>
+  <HighResolutionIconUrl DefaultValue="https://fluctuum.github.io/fluctuum-file/assets/icon-128.png"/>
+  <SupportUrl DefaultValue="https://fluctuum.com"/>
+  <AppDomains>
+    <AppDomain>https://fluctuum.github.io</AppDomain>
+    <AppDomain>https://login.microsoftonline.com</AppDomain>
+  </AppDomains>
+  <Hosts>
+    <Host Name="Mailbox"/>
+  </Hosts>
+  <Requirements>
+    <Sets>
+      <Set Name="Mailbox" MinVersion="1.5"/>
+    </Sets>
+  </Requirements>
+  <FormSettings>
+    <Form xsi:type="ItemRead">
+      <DesktopSettings>
+        <SourceLocation DefaultValue="https://fluctuum.github.io/fluctuum-file/taskpane.html"/>
+        <RequestedHeight>250</RequestedHeight>
+      </DesktopSettings>
+    </Form>
+  </FormSettings>
+  <Permissions>ReadWriteMailbox</Permissions>
+  <Rule xsi:type="RuleCollection" Mode="Or">
+    <Rule xsi:type="ItemIs" ItemType="Message" FormType="Read"/>
+  </Rule>
+  <DisableEntityHighlighting>false</DisableEntityHighlighting>
+
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Requirements>
+      <bt:Sets DefaultMinVersion="1.3">
+        <bt:Set Name="Mailbox"/>
+      </bt:Sets>
+    </Requirements>
+    <Hosts>
+      <Host xsi:type="MailHost">
+        <DesktopFormFactor>
+          <FunctionFile resid="Commands.Url"/>
+          <ExtensionPoint xsi:type="MessageReadCommandSurface">
+            <OfficeTab id="TabDefault">
+              <Group id="fcdReadGroup10">
+                <Label resid="Group.Label"/>
+                <Control xsi:type="Button" id="msgReadOpenPaneButton10">
+                  <Label resid="ReadButton.Label"/>
+                  <Supertip>
+                    <Title resid="ReadButton.Label"/>
+                    <Description resid="ReadButton.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16"/>
+                    <bt:Image size="32" resid="Icon.32"/>
+                    <bt:Image size="80" resid="Icon.80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <SourceLocation resid="Taskpane.Url"/>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon.16" DefaultValue="https://fluctuum.github.io/fluctuum-file/assets/icon-16.png"/>
+        <bt:Image id="Icon.32" DefaultValue="https://fluctuum.github.io/fluctuum-file/assets/icon-32.png"/>
+        <bt:Image id="Icon.80" DefaultValue="https://fluctuum.github.io/fluctuum-file/assets/icon-80.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="Commands.Url" DefaultValue="https://fluctuum.github.io/fluctuum-file/commands.html"/>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://fluctuum.github.io/fluctuum-file/taskpane.html"/>
+        <bt:Url id="WebViewRuntime.Url" DefaultValue="https://fluctuum.github.io/fluctuum-file/commands.html"/>
+        <bt:Url id="JSRuntime.Url" DefaultValue="https://fluctuum.github.io/fluctuum-file/launchevent.js"/>
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="Group.Label" DefaultValue="Fluctuum"/>
+        <bt:String id="ReadButton.Label" DefaultValue="File to project"/>
+        <bt:String id="ComposeButton.Label" DefaultValue="Project"/>
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="ReadButton.Tooltip" DefaultValue="Save this email (or the selected emails) into the project's 07 Comms folder in FCD."/>
+        <bt:String id="ComposeButton.Tooltip" DefaultValue="Choose the project this email belongs to. It is filed automatically after sending."/>
+      </bt:LongStrings>
+    </Resources>
+    <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides/1.1" xsi:type="VersionOverridesV1_1">
+      <Requirements>
+        <bt:Sets DefaultMinVersion="1.13">
+          <bt:Set Name="Mailbox"/>
+        </bt:Sets>
+      </Requirements>
+      <Hosts>
+        <Host xsi:type="MailHost">
+          <Runtimes>
+            <!-- Browser runtime (web, new Outlook, Mac) loads commands.html; classic Outlook on Windows loads launchevent.js directly -->
+            <Runtime resid="WebViewRuntime.Url">
+              <Override type="javascript" resid="JSRuntime.Url"/>
+            </Runtime>
+          </Runtimes>
+          <DesktopFormFactor>
+            <FunctionFile resid="Commands.Url"/>
+
+            <!-- Reading an email: File to project -->
+            <ExtensionPoint xsi:type="MessageReadCommandSurface">
+              <OfficeTab id="TabDefault">
+                <Group id="fcdReadGroup">
+                  <Label resid="Group.Label"/>
+                  <Control xsi:type="Button" id="msgReadOpenPaneButton">
+                    <Label resid="ReadButton.Label"/>
+                    <Supertip>
+                      <Title resid="ReadButton.Label"/>
+                      <Description resid="ReadButton.Tooltip"/>
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16"/>
+                      <bt:Image size="32" resid="Icon.32"/>
+                      <bt:Image size="80" resid="Icon.80"/>
+                    </Icon>
+                    <Action xsi:type="ShowTaskpane">
+                      <SourceLocation resid="Taskpane.Url"/>
+                      <SupportsPinning>true</SupportsPinning>
+                      <SupportsMultiSelect>true</SupportsMultiSelect>
+                    </Action>
+                  </Control>
+                </Group>
+              </OfficeTab>
+            </ExtensionPoint>
+
+            <!-- Composing an email: choose the project before sending -->
+            <ExtensionPoint xsi:type="MessageComposeCommandSurface">
+              <OfficeTab id="TabDefault">
+                <Group id="fcdComposeGroup">
+                  <Label resid="Group.Label"/>
+                  <Control xsi:type="Button" id="msgComposeOpenPaneButton">
+                    <Label resid="ComposeButton.Label"/>
+                    <Supertip>
+                      <Title resid="ComposeButton.Label"/>
+                      <Description resid="ComposeButton.Tooltip"/>
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16"/>
+                      <bt:Image size="32" resid="Icon.32"/>
+                      <bt:Image size="80" resid="Icon.80"/>
+                    </Icon>
+                    <Action xsi:type="ShowTaskpane">
+                      <SourceLocation resid="Taskpane.Url"/>
+                    </Action>
+                  </Control>
+                </Group>
+              </OfficeTab>
+            </ExtensionPoint>
+
+            <!-- Smart Alert on send -->
+            <ExtensionPoint xsi:type="LaunchEvent">
+              <LaunchEvents>
+                <LaunchEvent Type="OnMessageSend" FunctionName="onMessageSendHandler" SendMode="PromptUser"/>
+              </LaunchEvents>
+              <SourceLocation resid="WebViewRuntime.Url"/>
+            </ExtensionPoint>
+          </DesktopFormFactor>
+        </Host>
+      </Hosts>
+      <Resources>
+        <bt:Images>
+          <bt:Image id="Icon.16" DefaultValue="https://fluctuum.github.io/fluctuum-file/assets/icon-16.png"/>
+          <bt:Image id="Icon.32" DefaultValue="https://fluctuum.github.io/fluctuum-file/assets/icon-32.png"/>
+          <bt:Image id="Icon.80" DefaultValue="https://fluctuum.github.io/fluctuum-file/assets/icon-80.png"/>
+        </bt:Images>
+        <bt:Urls>
+          <bt:Url id="Commands.Url" DefaultValue="https://fluctuum.github.io/fluctuum-file/commands.html"/>
+          <bt:Url id="Taskpane.Url" DefaultValue="https://fluctuum.github.io/fluctuum-file/taskpane.html"/>
+          <bt:Url id="WebViewRuntime.Url" DefaultValue="https://fluctuum.github.io/fluctuum-file/commands.html"/>
+          <bt:Url id="JSRuntime.Url" DefaultValue="https://fluctuum.github.io/fluctuum-file/launchevent.js"/>
+        </bt:Urls>
+        <bt:ShortStrings>
+          <bt:String id="Group.Label" DefaultValue="Fluctuum"/>
+          <bt:String id="ReadButton.Label" DefaultValue="File to project"/>
+          <bt:String id="ComposeButton.Label" DefaultValue="Project"/>
+        </bt:ShortStrings>
+        <bt:LongStrings>
+          <bt:String id="ReadButton.Tooltip" DefaultValue="Save this email (or the selected emails) into the project's 07 Comms folder in FCD."/>
+          <bt:String id="ComposeButton.Tooltip" DefaultValue="Choose the project this email belongs to. It is filed automatically after sending."/>
+        </bt:LongStrings>
+      </Resources>
+    </VersionOverrides>
+  </VersionOverrides>
+</OfficeApp>
