@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fluctuum File</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="taskpane.css">
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@4.30.0/lib/msal-browser.min.js"></script>
+  <script src="config.js"></script>
+</head>
+<body>
+  <header class="bar">
+    <span class="kicker">Fluctuum · FCD</span>
+    <button id="refresh" class="link" title="Reload the project list">Refresh</button>
+  </header>
+
+  <main>
+    <section id="context" class="card">
+      <div class="kicker" id="modeLabel">Email</div>
+      <div id="itemSummary" class="summary">Loading…</div>
+      <div id="filedStatus" class="filed hidden"></div>
+    </section>
+
+    <section id="suggestBox" class="card hidden">
+      <div class="kicker">Suggested</div>
+      <button id="suggestBtn" class="project suggested"></button>
+      <div id="suggestWhy" class="muted small"></div>
+    </section>
+
+    <section class="card">
+      <div class="kicker">Project</div>
+      <input id="search" type="search" placeholder="Search code or name" autocomplete="off">
+      <ul id="projectList" class="list"></ul>
+      <div class="muted small" id="listInfo"></div>
+    </section>
+
+    <section id="composeExtra" class="card hidden">
+      <button id="noProject" class="secondary">Send without project</button>
+    </section>
+
+    <section id="status" class="status hidden"></section>
+  </main>
+
+  <script src="taskpane.js"></script>
+</body>
+</html>
