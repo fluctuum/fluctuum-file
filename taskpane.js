@@ -9,7 +9,7 @@
   const CFG = window.FCD_CONFIG;
   const GRAPH = "https://graph.microsoft.com/v1.0";
   const SCOPES = ["User.Read", "Mail.ReadWrite", "Sites.ReadWrite.All", "MailboxSettings.ReadWrite"];
-  const CACHE_KEY = "fcd.projects.v2";
+  const CACHE_KEY = "fcd.projects.v3";
   const CACHE_HOURS = 6;
   const SIMPLE_UPLOAD_MAX = 4 * 1024 * 1024 - 1024;
   const CHUNK = 320 * 1024 * 10; // 3.2 MB, multiple of 320 KiB as Graph requires
@@ -136,7 +136,6 @@
   // Sources listed in the picker. Projects: <root>/<year>/<AAxxxx Name>. Proposals: Proposals/<year>/<PAAxxxx_Name>.
   const SOURCES = [
     { kind: "project", root: CFG.projectsRoot, re: /^(\d{6})\s*[-_ ]?\s*(.*)$/ },
-    { kind: "project", root: "Projects - AU", re: /^(\d{6})\s*[-_ ]?\s*(.*)$/ },
     { kind: "proposal", root: CFG.proposalsRoot || "Proposals", re: /^(P\d{6})\s*[-_ ]?\s*(.*)$/i }
   ];
 
