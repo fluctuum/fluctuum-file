@@ -326,17 +326,18 @@
   const commsCache = {};
   async function commsFolderFor(project) {
     if (commsCache[project.path]) return commsCache[project.path];
+    const def = project.kind === "proposal" ? (CFG.proposalCommsFolder || "04 Com") : CFG.commsFolder;
     let name = null;
     try {
       const kids = (await graphAll(`/drives/${CFG.driveId}/root:/${encPath(project.path)}:/children?$select=name,folder&$top=999`))
         .filter((f) => f.folder).map((f) => f.name);
       const norm = (n) => n.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-      name = kids.find((n) => norm(n) === norm(CFG.commsFolder))
-        || kids.find((n) => /^\d{1,2}\s*[-_.]?\s*comms\b/i.test(n))
+      name = kids.find((n) => norm(n) === norm(def))
+        || kids.find((n) => /^\d{1,2}\s*[-_.]?\s*com(ms|unicaciones|munications?)?\b/i.test(n))
         || kids.find((n) => /(correspondencia|correspondence|e-?mails?|correos?|comms|communications?|comunicaciones)/i.test(norm(n)))
         || null;
     } catch (e) { console.warn("comms lookup", e); }
-    const path = `${project.path}/${name || (project.kind === "proposal" ? (CFG.proposalCommsFolder || "Comms") : CFG.commsFolder)}`;
+    const path = `${project.path}/${name || def}`;
     commsCache[project.path] = path;
     return path;
   }
