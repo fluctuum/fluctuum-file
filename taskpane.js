@@ -9,7 +9,7 @@
   const CFG = window.FCD_CONFIG;
   const GRAPH = "https://graph.microsoft.com/v1.0";
   const SCOPES = ["User.Read", "Mail.ReadWrite", "Sites.ReadWrite.All", "MailboxSettings.ReadWrite"];
-  const CACHE_KEY = "fcd.projects.v1";
+  const CACHE_KEY = "fcd.projects.v2";
   const CACHE_HOURS = 6;
   const SIMPLE_UPLOAD_MAX = 4 * 1024 * 1024 - 1024;
   const CHUNK = 320 * 1024 * 10; // 3.2 MB, multiple of 320 KiB as Graph requires
@@ -133,26 +133,40 @@
 
   /* ---------- projects ---------- */
 
+  // Sources listed in the picker. Projects: <root>/<year>/<AAxxxx Name>. Proposals: Proposals/<year>/<PAAxxxx_Name>.
+  const SOURCES = [
+    { kind: "project", root: CFG.projectsRoot, re: /^(\d{6})\s*[-_ ]?\s*(.*)$/ },
+    { kind: "project", root: "Projects - AU", re: /^(\d{6})\s*[-_ ]?\s*(.*)$/ },
+    { kind: "proposal", root: CFG.proposalsRoot || "Proposals", re: /^(P\d{6})\s*[-_ ]?\s*(.*)$/i }
+  ];
+
+  async function listSource(src) {
+    let years;
+    try {
+      years = (await graphAll(`/drives/${CFG.driveId}/root:/${encPath(src.root)}:/children?$select=name,folder&$top=999`))
+        .filter((f) => f.folder && /^\d{4}$/.test(f.name)).map((f) => f.name);
+    } catch (e) { if (e.status === 404) return []; throw e; }
+    const perYear = await Promise.all(years.map((y) =>
+      graphAll(`/drives/${CFG.driveId}/root:/${encPath(src.root + "/" + y)}:/children?$select=name,folder&$top=999`)
+        .then((items) => items.filter((f) => f.folder).map((f) => {
+          const m = src.re.exec(f.name);
+          return m ? { code: m[1].toUpperCase(), name: m[2] || "", year: y, kind: src.kind, path: `${src.root}/${y}/${f.name}` } : null;
+        }).filter(Boolean))
+    ));
+    return [].concat.apply([], perYear);
+  }
+
   async function loadProjects(force) {
     const cached = lsGet(CACHE_KEY);
     if (!force && cached && Date.now() - cached.ts < CACHE_HOURS * 3600e3 && cached.list.length) {
       projects = cached.list;
       return;
     }
-    $("listInfo").textContent = "Loading projects from FCD…";
-    const root = CFG.projectsRoot;
-    const years = (await graphAll(`/drives/${CFG.driveId}/root:/${encPath(root)}:/children?$select=name,folder&$top=999`))
-      .filter((f) => f.folder && /^\d{4}$/.test(f.name))
-      .map((f) => f.name)
-      .sort().reverse();
-    const perYear = await Promise.all(years.map((y) =>
-      graphAll(`/drives/${CFG.driveId}/root:/${encPath(root + "/" + y)}:/children?$select=name,folder&$top=999`)
-        .then((items) => items.filter((f) => f.folder).map((f) => {
-          const m = /^(\d{6})\s*[-_ ]?\s*(.*)$/.exec(f.name);
-          return m ? { code: m[1], name: m[2] || "", year: y, path: `${root}/${y}/${f.name}` } : null;
-        }).filter(Boolean))
-    ));
-    projects = [].concat.apply([], perYear).sort((a, b) => b.code.localeCompare(a.code));
+    $("listInfo").textContent = "Loading projects and proposals from FCD…";
+    const all = [].concat.apply([], await Promise.all(SOURCES.map(listSource)));
+    const seen = {};
+    projects = all.filter((p) => (seen[p.code] ? false : (seen[p.code] = true)))
+      .sort((a, b) => (b.year + b.code.replace(/^P/, "")).localeCompare(a.year + a.code.replace(/^P/, "")) || a.kind.localeCompare(b.kind));
     lsSet(CACHE_KEY, { ts: Date.now(), list: projects });
     saveCodesToRoaming();
   }
@@ -183,22 +197,26 @@
 
   function findProject(code) { return projects.find((p) => p.code === code) || null; }
 
+  let kindFilter = "all";
   function renderList() {
-    const q = $("search").value.trim().toLowerCase()
-      .normalize("NFD").replace(/[̀-ͯ]/g, "");
+    const fold = (t) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const q = fold($("search").value.trim());
     const ul = $("projectList");
-    const hits = projects.filter((p) => !q || (p.code + " " + p.name).toLowerCase()
-      .normalize("NFD").replace(/[̀-ͯ]/g, "").includes(q));
+    const hits = projects.filter((p) => (kindFilter === "all" || p.kind === kindFilter)
+      && (!q || fold(p.code + " " + p.name).includes(q)));
     const shown = hits.slice(0, 80);
-    let html = "", lastYear = null;
+    let html = "", lastHead = null;
     shown.forEach((p) => {
-      if (p.year !== lastYear) { html += `<li class="year">${esc(p.year)}</li>`; lastYear = p.year; }
+      const head = p.year + (p.kind === "proposal" ? " · Proposals" : " · Projects");
+      if (head !== lastHead) { html += `<li class="year">${esc(head)}</li>`; lastHead = head; }
       html += `<li><button class="project" data-code="${esc(p.code)}"><span class="code">${esc(p.code)}</span>${esc(p.name)}</button></li>`;
     });
-    ul.innerHTML = html || `<li class="muted small">No project matches.</li>`;
+    ul.innerHTML = html || `<li class="muted small">Nothing matches.</li>`;
+    const nP = projects.filter((p) => p.kind === "project").length, nQ = projects.length - nP;
     $("listInfo").textContent = hits.length > shown.length
       ? `Showing ${shown.length} of ${hits.length}. Type to narrow down.`
-      : `${projects.length} projects in FCD.`;
+      : `${nP} projects, ${nQ} proposals in FCD.`;
+    document.querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c.dataset.kind === kindFilter));
   }
 
   /* ---------- Correspondence list ---------- */
@@ -232,7 +250,7 @@
       } catch (e) { console.warn(e); }
     }
     if (!code && info.subject) {
-      const m = String(info.subject).match(/\b\d{6}\b/g) || [];
+      const m = (String(info.subject).match(/\bP?\d{6}\b/gi) || []).map((c) => c.toUpperCase());
       const hit = m.find((c) => findProject(c));
       if (hit) { code = hit; why = "Project code found in the subject."; }
     }
@@ -319,7 +337,7 @@
         || kids.find((n) => /(correspondencia|correspondence|e-?mails?|correos?|comms|communications?|comunicaciones)/i.test(norm(n)))
         || null;
     } catch (e) { console.warn("comms lookup", e); }
-    const path = `${project.path}/${name || CFG.commsFolder}`;
+    const path = `${project.path}/${name || (project.kind === "proposal" ? (CFG.proposalCommsFolder || "Comms") : CFG.commsFolder)}`;
     commsCache[project.path] = path;
     return path;
   }
@@ -513,6 +531,7 @@
 
   Office.onReady(async () => {
     $("search").addEventListener("input", renderList);
+    document.querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => { kindFilter = c.dataset.kind; renderList(); }));
     $("projectList").addEventListener("click", (ev) => {
       const b = ev.target.closest("button[data-code]");
       if (b) onPick(b.dataset.code);

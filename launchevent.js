@@ -65,10 +65,10 @@ function onMessageSendHandler(event) {
       // 2. Project code in subject
       item.subject.getAsync(function (s) {
         var subject = (s && s.value) || "";
-        var m = subject.match(/\b\d{6}\b/g) || [];
+        var m = subject.match(/\bP?\d{6}\b/gi) || [];
         for (var i = 0; i < m.length; i++) {
-          if (codes.indexOf(m[i]) >= 0) {
-            var code = m[i];
+          if (codes.indexOf(m[i].toUpperCase()) >= 0) {
+            var code = m[i].toUpperCase();
             finish(function () { fcdSetAndAllow(event, props, code, "subject"); });
             return;
           }

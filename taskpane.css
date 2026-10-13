@@ -76,3 +76,7 @@ button { font: inherit; cursor: pointer; border-radius: 0; }
 .status.error { border-left-color: var(--accent-dark); background: var(--accent-pale); }
 .status a { color: var(--accent); }
 .year { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--muted); padding: 8px 4px 2px; }
+.chips { display: flex; gap: 6px; margin-bottom: 8px; }
+.chip { font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 4px 8px; background: none; color: var(--muted); border: 1px solid var(--border); }
+.chip.on { color: #fff; background: var(--accent); border-color: var(--accent); }
