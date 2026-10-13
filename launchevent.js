@@ -28,6 +28,13 @@ function fcdAllow(event) {
 function fcdSetAndAllow(event, props, code, how) {
   props.set("project", code);
   props.set("inferred", how);
+  try {
+    var rs = Office.context.roamingSettings;
+    var cp = (rs && rs.get("cpath")) || {};
+    var paths = (rs && rs.get("paths")) || {};
+    var comms = cp[code] || (paths[code] ? paths[code] + "/" + (code.charAt(0) === "P" ? "04 Com" : "07 Comms") : "");
+    if (comms) props.set("comms", comms);
+  } catch (e) { /* ignore */ }
   props.saveAsync(function () { fcdAllow(event); });
 }
 

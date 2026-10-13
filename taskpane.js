@@ -175,6 +175,11 @@
     try {
       const rs = Office.context.roamingSettings;
       rs.set("codes", projects.map((p) => p.code).join(","));
+      // Folder paths for recent projects and all proposals, so the send handler can tag the email with its folder
+      const minYear = String(new Date().getFullYear() - 2);
+      const paths = {};
+      projects.filter((p) => p.kind === "proposal" || p.year >= minYear).forEach((p) => { paths[p.code] = p.path; });
+      rs.set("paths", paths);
       rs.saveAsync(() => {});
     } catch (e) { /* ignore */ }
   }
@@ -339,6 +344,14 @@
     } catch (e) { console.warn("comms lookup", e); }
     const path = `${project.path}/${name || def}`;
     commsCache[project.path] = path;
+    try {
+      const rs = Office.context.roamingSettings;
+      const cp = rs.get("cpath") || {};
+      delete cp[project.code]; cp[project.code] = path;
+      const ks = Object.keys(cp);
+      if (ks.length > 80) ks.slice(0, ks.length - 80).forEach((k) => delete cp[k]);
+      rs.set("cpath", cp); rs.saveAsync(() => {});
+    } catch (e) { /* ignore */ }
     return path;
   }
 
@@ -440,12 +453,13 @@
     const props = await officeAsync((cb) => item.loadCustomPropertiesAsync(cb));
     if (code === "NONE") {
       props.set("project", "NONE");
-      props.remove("projectName"); props.remove("folder");
+      props.remove("projectName"); props.remove("folder"); props.remove("comms");
     } else {
       const p = findProject(code);
       props.set("project", p.code);
       props.set("projectName", p.name);
       props.set("folder", p.path);
+      props.set("comms", await commsFolderFor(p));
     }
     await officeAsync((cb) => props.saveAsync(cb));
     if (code !== "NONE" && item.conversationId) rememberThread(item.conversationId, code);
