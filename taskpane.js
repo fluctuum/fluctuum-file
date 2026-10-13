@@ -450,10 +450,21 @@
     await officeAsync((cb) => props.saveAsync(cb));
     if (code !== "NONE" && item.conversationId) rememberThread(item.conversationId, code);
     const p = findProject(code);
+    const where = code === "NONE" ? "" : (p.kind === "proposal" ? "04 Com" : "07 Comms");
     status(code === "NONE"
-      ? "This email will be sent without a project."
-      : `Project set: <b>${esc(p.code)} ${esc(p.name)}</b>. It will be filed in 07 Comms after sending.`);
+      ? "<b>Ready to send.</b> This email will go out without a project."
+      : `<b>Ready to send.</b> Project ${esc(p.code)} ${esc(p.name)}. It will be filed in ${where} after sending.`);
     showComposeState(code);
+    // Banner inside the email, visible even after closing the pane
+    try {
+      const msg = code === "NONE"
+        ? "Fluctuum: no project. Ready to send."
+        : `Fluctuum: ${p.code} ${p.name}. Ready to send, it will be filed after sending.`;
+      item.notificationMessages.replaceAsync("fcdProject", {
+        type: Office.MailboxEnums.ItemNotificationMessageType.InformationalMessage,
+        message: msg.slice(0, 150), icon: "Icon.16", persistent: false
+      }, () => {});
+    } catch (e) { /* older client */ }
   }
 
   function showComposeState(code) {
