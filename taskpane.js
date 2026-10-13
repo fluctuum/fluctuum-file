@@ -304,6 +304,26 @@
     return result;
   }
 
+  // Old projects use other names for the email folder ("Emails o correspondencia", "01 Comms"...).
+  // Use the existing one; only create CFG.commsFolder when the project has none.
+  const commsCache = {};
+  async function commsFolderFor(project) {
+    if (commsCache[project.path]) return commsCache[project.path];
+    let name = null;
+    try {
+      const kids = (await graphAll(`/drives/${CFG.driveId}/root:/${encPath(project.path)}:/children?$select=name,folder&$top=999`))
+        .filter((f) => f.folder).map((f) => f.name);
+      const norm = (n) => n.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      name = kids.find((n) => norm(n) === norm(CFG.commsFolder))
+        || kids.find((n) => /^\d{1,2}\s*[-_.]?\s*comms\b/i.test(n))
+        || kids.find((n) => /(correspondencia|correspondence|e-?mails?|correos?|comms|communications?|comunicaciones)/i.test(norm(n)))
+        || null;
+    } catch (e) { console.warn("comms lookup", e); }
+    const path = `${project.path}/${name || CFG.commsFolder}`;
+    commsCache[project.path] = path;
+    return path;
+  }
+
   async function fileMessage(restId, project) {
     const me = (Office.context.mailbox.userProfile.emailAddress || "").toLowerCase();
     const msg = await graph(`/me/messages/${encodeURIComponent(restId)}?$select=subject,from,toRecipients,ccRecipients,receivedDateTime,sentDateTime,conversationId,internetMessageId,hasAttachments,categories`);
@@ -326,7 +346,7 @@
 
       const mimeRes = await graph(`/me/messages/${encodeURIComponent(restId)}/$value`, { raw: true });
       const blob = await mimeRes.blob();
-      const item = await uploadEml(`${project.path}/${CFG.commsFolder}/${fileName}`, blob);
+      const item = await uploadEml(`${await commsFolderFor(project)}/${fileName}`, blob);
       webUrl = item && item.webUrl;
 
       const to = (msg.toRecipients || []).concat(msg.ccRecipients || [])
@@ -388,7 +408,7 @@
       const folderUrl = lastUrl ? lastUrl.replace(/\/[^\/]+$/, "") : null;
       status(`Filed ${ok} email${ok === 1 ? "" : "s"} in <b>${esc(project.code)} ${esc(project.name)}</b>` +
         (dups ? ` (${dups} already there)` : "") +
-        (folderUrl ? `<br><a href="${esc(folderUrl)}" target="_blank">Open 07 Comms</a>` : ""));
+        (folderUrl ? `<br><a href="${esc(folderUrl)}" target="_blank">Open ${esc(decodeURIComponent(folderUrl.split("/").pop()))}</a>` : ""));
       refreshContext(true).catch(console.error);
     } else {
       status(`Filed ${ok}, failed ${failed}. Check the error above and try again.`, true);
