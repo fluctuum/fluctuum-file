@@ -5,11 +5,11 @@
            xmlns:mailappor="http://schemas.microsoft.com/office/mailappversionoverrides/1.0"
            xsi:type="MailApp">
   <Id>d74fccdf-7625-4c5c-af70-1c0dae0b5386</Id>
-  <Version>1.0.0.0</Version>
+  <Version>1.0.1.0</Version>
   <ProviderName>Fluctuum</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="Fluctuum File"/>
-  <Description DefaultValue="File emails into FCD project folders (07 Comms) and log them in the Correspondence list."/>
+  <Description DefaultValue="File emails into FCD project and proposal folders and log them in the Correspondence list."/>
   <IconUrl DefaultValue="https://fluctuum.github.io/fluctuum-file/assets/icon-64.png"/>
   <HighResolutionIconUrl DefaultValue="https://fluctuum.github.io/fluctuum-file/assets/icon-128.png"/>
   <SupportUrl DefaultValue="https://fluctuum.com"/>
@@ -87,13 +87,13 @@
         <bt:Url id="JSRuntime.Url" DefaultValue="https://fluctuum.github.io/fluctuum-file/launchevent.js"/>
       </bt:Urls>
       <bt:ShortStrings>
-        <bt:String id="Group.Label" DefaultValue="Fluctuum"/>
-        <bt:String id="ReadButton.Label" DefaultValue="File to project"/>
-        <bt:String id="ComposeButton.Label" DefaultValue="Project"/>
+        <bt:String id="Group.Label" DefaultValue="Fluctuum File"/>
+        <bt:String id="ReadButton.Label" DefaultValue="Fluctuum File"/>
+        <bt:String id="ComposeButton.Label" DefaultValue="Fluctuum File"/>
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="ReadButton.Tooltip" DefaultValue="Save this email (or the selected emails) into the project's 07 Comms folder in FCD."/>
-        <bt:String id="ComposeButton.Tooltip" DefaultValue="Choose the project this email belongs to. It is filed automatically after sending."/>
+        <bt:String id="ReadButton.Tooltip" DefaultValue="File this email (or the selected emails) into FCD: projects in 07 Comms, proposals in 04 Com."/>
+        <bt:String id="ComposeButton.Tooltip" DefaultValue="Choose the project or proposal this email belongs to. It is filed after sending."/>
       </bt:LongStrings>
     </Resources>
     <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides/1.1" xsi:type="VersionOverridesV1_1">
@@ -186,13 +186,13 @@
           <bt:Url id="JSRuntime.Url" DefaultValue="https://fluctuum.github.io/fluctuum-file/launchevent.js"/>
         </bt:Urls>
         <bt:ShortStrings>
-          <bt:String id="Group.Label" DefaultValue="Fluctuum"/>
-          <bt:String id="ReadButton.Label" DefaultValue="File to project"/>
-          <bt:String id="ComposeButton.Label" DefaultValue="Project"/>
+          <bt:String id="Group.Label" DefaultValue="Fluctuum File"/>
+          <bt:String id="ReadButton.Label" DefaultValue="Fluctuum File"/>
+          <bt:String id="ComposeButton.Label" DefaultValue="Fluctuum File"/>
         </bt:ShortStrings>
         <bt:LongStrings>
-          <bt:String id="ReadButton.Tooltip" DefaultValue="Save this email (or the selected emails) into the project's 07 Comms folder in FCD."/>
-          <bt:String id="ComposeButton.Tooltip" DefaultValue="Choose the project this email belongs to. It is filed automatically after sending."/>
+          <bt:String id="ReadButton.Tooltip" DefaultValue="File this email (or the selected emails) into FCD: projects in 07 Comms, proposals in 04 Com."/>
+          <bt:String id="ComposeButton.Tooltip" DefaultValue="Choose the project or proposal this email belongs to. It is filed after sending."/>
         </bt:LongStrings>
       </Resources>
     </VersionOverrides>
