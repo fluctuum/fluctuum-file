@@ -13,9 +13,9 @@ function fcdNormConv(id) {
 function fcdAsk(event) {
   event.completed({
     allowEvent: false,
-    errorMessage: "Which project does this email belong to? Choose one in Fluctuum File so it is filed in 07 Comms, or send it without a project.",
-    errorMessageMarkdown: "**Which project does this email belong to?**\n\nChoose one in Fluctuum File so it is filed in 07 Comms after sending, or select **Send Anyway** to send it without a project.",
-    cancelLabel: "Choose project",
+    errorMessage: "Which project or proposal does this email belong to? Choose one in Fluctuum File so it is filed after sending (project: 07 Comms, proposal: 04 Com), or send it without one.",
+    errorMessageMarkdown: "**Which project or proposal does this email belong to?**\n\nChoose one in Fluctuum File so it is filed after sending (projects in **07 Comms**, proposals in **04 Com**), or select **Send Anyway** to send it without one.",
+    cancelLabel: "Choose",
     commandId: "msgComposeOpenPaneButton",
     sendModeOverride: Office.MailboxEnums.SendModeOverride.PromptUser
   });

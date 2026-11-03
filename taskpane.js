@@ -201,26 +201,55 @@
 
   function findProject(code) { return projects.find((p) => p.code === code) || null; }
 
-  let kindFilter = "all";
+  // Projects and proposals live in different trees and file to different folders; never mix them in one list.
+  const KIND = {
+    project: { label: "Project", plural: "Projects", root: () => CFG.projectsRoot, comms: () => CFG.commsFolder },
+    proposal: { label: "Proposal", plural: "Proposals", root: () => CFG.proposalsRoot || "Proposals", comms: () => CFG.proposalCommsFolder || "04 Com" }
+  };
+  function kindOf(code) { return /^P/i.test(code || "") ? "proposal" : "project"; }
+  function kindBadge(kind) { return `<span class="kind ${kind}">${KIND[kind].label}</span>`; }
+
+  const TAB_KEY = "fcd.tab";
+  let kindFilter = lsGet(TAB_KEY) === "proposal" ? "proposal" : "project";
+  function setTab(kind) {
+    if (!KIND[kind]) return;
+    kindFilter = kind; lsSet(TAB_KEY, kind);
+    renderList();
+  }
+
   function renderList() {
-    const fold = (t) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const fold = (t) => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
     const q = fold($("search").value.trim());
+    const match = (p) => !q || fold(p.code + " " + p.name).includes(q);
     const ul = $("projectList");
-    const hits = projects.filter((p) => (kindFilter === "all" || p.kind === kindFilter)
-      && (!q || fold(p.code + " " + p.name).includes(q)));
+    const hits = projects.filter((p) => p.kind === kindFilter && match(p));
     const shown = hits.slice(0, 80);
-    let html = "", lastHead = null;
+    let html = "", lastYear = null;
     shown.forEach((p) => {
-      const head = p.year + (p.kind === "proposal" ? " · Proposals" : " · Projects");
-      if (head !== lastHead) { html += `<li class="year">${esc(head)}</li>`; lastHead = head; }
+      if (p.year !== lastYear) { html += `<li class="year">${esc(p.year)}</li>`; lastYear = p.year; }
       html += `<li><button class="project" data-code="${esc(p.code)}"><span class="code">${esc(p.code)}</span>${esc(p.name)}</button></li>`;
     });
-    ul.innerHTML = html || `<li class="muted small">Nothing matches.</li>`;
-    const nP = projects.filter((p) => p.kind === "project").length, nQ = projects.length - nP;
-    $("listInfo").textContent = hits.length > shown.length
-      ? `Showing ${shown.length} of ${hits.length}. Type to narrow down.`
-      : `${nP} projects, ${nQ} proposals in FCD.`;
-    document.querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c.dataset.kind === kindFilter));
+    const K = KIND[kindFilter];
+    ul.innerHTML = html || `<li class="muted small">No ${K.plural.toLowerCase()} match.</li>`;
+
+    // Point to the other tab when the search finds things there
+    const other = kindFilter === "project" ? "proposal" : "project";
+    const otherHits = q ? projects.filter((p) => p.kind === other && match(p)).length : 0;
+    const ob = $("otherHits");
+    ob.dataset.kind = other;
+    ob.textContent = `${otherHits} match${otherHits === 1 ? "" : "es"} in ${KIND[other].plural} →`;
+    show(ob, otherHits > 0);
+
+    const n = (k) => projects.filter((p) => p.kind === k).length;
+    $("countProject").textContent = n("project") || "";
+    $("countProposal").textContent = n("proposal") || "";
+    $("destInfo").innerHTML = `${esc(K.root())}/&lt;year&gt;/… → files into <b>${esc(K.comms())}</b>`;
+    $("listInfo").textContent = hits.length > shown.length ? `Showing ${shown.length} of ${hits.length}. Type to narrow down.` : "";
+    $("search").placeholder = `Search ${K.label.toLowerCase()} code or name`;
+    document.querySelectorAll(".tab").forEach((c) => {
+      c.classList.toggle("on", c.dataset.kind === kindFilter);
+      c.setAttribute("aria-selected", c.dataset.kind === kindFilter ? "true" : "false");
+    });
   }
 
   /* ---------- Correspondence list ---------- */
@@ -275,14 +304,16 @@
     show($("suggestBox"), !!p);
     if (p) {
       $("suggestBtn").dataset.code = p.code;
-      $("suggestBtn").innerHTML = `<span class="code">${esc(p.code)}</span>${esc(p.name)}`;
-      $("suggestWhy").textContent = s.why;
+      $("suggestBtn").innerHTML = `${kindBadge(p.kind)}<span class="code">${esc(p.code)}</span>${esc(p.name)}`;
+      $("suggestWhy").textContent = `${s.why} Files into ${KIND[p.kind].comms()}.`;
+      // Open the matching tab so the list shows the same kind as the suggestion
+      if (p.kind !== kindFilter && !$("search").value.trim()) setTab(p.kind);
     }
     const filed = $("filedStatus");
     if (s.filedIn && s.filedIn.length) {
       filed.innerHTML = "Already filed in " + s.filedIn.map((r) => {
         const pr = findProject(r.Project);
-        const label = esc(r.Project + (pr ? " " + pr.name : ""));
+        const label = kindBadge(kindOf(r.Project)) + esc(r.Project + (pr ? " " + pr.name : ""));
         return r.FileUrl ? `<a href="${esc(r.FileUrl)}" target="_blank">${label}</a>` : label;
       }).join(", ");
       show(filed, true);
@@ -355,7 +386,22 @@
     return path;
   }
 
-  async function fileMessage(restId, project) {
+  // Correspondence item. Kind may not exist yet if Actualizar-Correspondence.ps1 has not run: retry without it.
+  let kindColumn = true;
+  async function createCorrItem(fields) {
+    const post = (f) => graph(`/sites/${CFG.siteId}/lists/${CFG.listId}/items`, { method: "POST", json: { fields: f } });
+    if (kindColumn) {
+      try { return await post(Object.assign({ Kind: KIND[kindOf(fields.Project)].label }, fields)); } catch (e) {
+        if (!(e.status === 400 && /kind|field|column/i.test(e.message || ""))) throw e;
+        kindColumn = false;
+      }
+    }
+    return post(fields);
+  }
+
+  // project: {code, name, kind, path}. opts.method: Manual | Send | Thread. opts.comms: target folder, skips the lookup.
+  async function fileMessage(restId, project, opts) {
+    opts = opts || {};
     const me = (Office.context.mailbox.userProfile.emailAddress || "").toLowerCase();
     const msg = await graph(`/me/messages/${encodeURIComponent(restId)}?$select=subject,from,toRecipients,ccRecipients,receivedDateTime,sentDateTime,conversationId,internetMessageId,hasAttachments,categories`);
     const imid = (msg.internetMessageId || "").slice(0, 255);
@@ -377,31 +423,26 @@
 
       const mimeRes = await graph(`/me/messages/${encodeURIComponent(restId)}/$value`, { raw: true });
       const blob = await mimeRes.blob();
-      const item = await uploadEml(`${await commsFolderFor(project)}/${fileName}`, blob);
+      const item = await uploadEml(`${opts.comms || await commsFolderFor(project)}/${fileName}`, blob);
       webUrl = item && item.webUrl;
 
       const to = (msg.toRecipients || []).concat(msg.ccRecipients || [])
         .map((r) => r.emailAddress.address).join("; ");
-      await graph(`/sites/${CFG.siteId}/lists/${CFG.listId}/items`, {
-        method: "POST",
-        json: {
-          fields: {
-            Title: (msg.subject || "(no subject)").slice(0, 255),
-            Project: project.code,
-            ProjectName: (project.name || "").slice(0, 255),
-            Direction: out ? "Out" : "In",
-            FromAddress: fromAddr.slice(0, 255),
-            FromDomain: (fromAddr.split("@")[1] || "").slice(0, 255),
-            ToAddresses: to,
-            MessageDate: when,
-            ConversationId: normConv(msg.conversationId).slice(0, 255),
-            InternetMessageId: imid,
-            FileUrl: webUrl || "",
-            FiledBy: me,
-            Method: "Manual",
-            HasAttachments: !!msg.hasAttachments
-          }
-        }
+      await createCorrItem({
+        Title: (msg.subject || "(no subject)").slice(0, 255),
+        Project: project.code,
+        ProjectName: (project.name || "").slice(0, 255),
+        Direction: out ? "Out" : "In",
+        FromAddress: fromAddr.slice(0, 255),
+        FromDomain: (fromAddr.split("@")[1] || "").slice(0, 255),
+        ToAddresses: to,
+        MessageDate: when,
+        ConversationId: normConv(msg.conversationId).slice(0, 255),
+        InternetMessageId: imid,
+        FileUrl: webUrl || "",
+        FiledBy: me,
+        Method: opts.method || "Manual",
+        HasAttachments: !!msg.hasAttachments
       });
     }
 
@@ -437,13 +478,129 @@
     busy = false;
     if (!failed) {
       const folderUrl = lastUrl ? lastUrl.replace(/\/[^\/]+$/, "") : null;
-      status(`Filed ${ok} email${ok === 1 ? "" : "s"} in <b>${esc(project.code)} ${esc(project.name)}</b>` +
+      status(`Filed ${ok} email${ok === 1 ? "" : "s"} in ${kindBadge(project.kind)}<b>${esc(project.code)} ${esc(project.name)}</b>` +
         (dups ? ` (${dups} already there)` : "") +
         (folderUrl ? `<br><a href="${esc(folderUrl)}" target="_blank">Open ${esc(decodeURIComponent(folderUrl.split("/").pop()))}</a>` : ""));
       refreshContext(true).catch(console.error);
     } else {
       status(`Filed ${ok}, failed ${failed}. Check the error above and try again.`, true);
     }
+  }
+
+  /* ---------- auto-filing: sent emails and replies in filed threads ---------- */
+  // Runs in each person's own mailbox while Fluctuum File is open (a pinned pane re-runs it every few minutes).
+  // Same rules as the FCD mail flows: sent with a project chosen at send time -> Send; any email whose thread
+  // is already in Correspondence -> Thread. Emails younger than SWEEP_MIN_AGE are left for those flows.
+  const PROP_ID = `String {00020329-0000-0000-C000-000000000046} Name cecp-${CFG.addinId}`;
+  const SWEEP_KEY = "fcd.sweep.v1";
+  const SWEEP_EVERY_MIN = 10;
+  const SWEEP_MIN_AGE_MIN = 20;
+  const SWEEP_SENT_DAYS = 14, SWEEP_INBOX_DAYS = 7;
+  const SKIP_HOURS = 6;
+  let sweeping = false;
+
+  async function listRecent(folder, dateField, days) {
+    const since = new Date(Date.now() - days * 864e5).toISOString();
+    const q = `$filter=${encodeURIComponent(`${dateField} ge ${since}`)}` +
+      `&$orderby=${encodeURIComponent(`${dateField} desc`)}&$top=100` +
+      `&$select=id,subject,categories,conversationId,${dateField}` +
+      `&$expand=${encodeURIComponent(`singleValueExtendedProperties($filter=id eq '${PROP_ID}')`)}`;
+    return ((await graph(`/me/mailFolders/${folder}/messages?${q}`)).value || [])
+      .map((m) => ({ m, when: m[dateField], sent: folder === "sentitems" }));
+  }
+
+  // "<site>/Shared Documents/Projects/2025/250101 X/07 Comms/file.eml" -> "Projects/2025/250101 X/07 Comms"
+  function folderFromFileUrl(url) {
+    let u = url || "";
+    try { u = decodeURIComponent(u); } catch (e) { /* keep raw */ }
+    const m = /\/Shared Documents\/(.+)\/[^\/]+$/i.exec(u);
+    return m ? m[1] : null;
+  }
+
+  // Custom properties saved on the draft (composeSet or launchevent.js)
+  function sentTarget(raw) {
+    let v = null;
+    try { v = JSON.parse(raw); } catch (e) { return null; }
+    if (!v || !v.project) return null;
+    if (v.project === "NONE") return { none: true };
+    const p = findProject(v.project);
+    if (p) return { project: p, comms: null };
+    const kind = kindOf(v.project);
+    const comms = v.comms || (v.folder ? `${v.folder}/${KIND[kind].comms()}` : null);
+    return comms ? { project: { code: v.project, name: v.projectName || "", kind, path: v.folder || "" }, comms } : null;
+  }
+
+  async function threadTarget(convKey, cache) {
+    if (convKey in cache) return cache[convKey];
+    let t = null;
+    try {
+      const rows = (await corrQuery("ConversationId", convKey, 50)).filter((r) => r.Project && r.Project !== "NONE");
+      const r = rows[rows.length - 1];
+      if (r) {
+        const p = findProject(r.Project);
+        const comms = p ? null : folderFromFileUrl(r.FileUrl);
+        if (p || comms) t = { project: p || { code: r.Project, name: r.ProjectName || "", kind: kindOf(r.Project) }, comms };
+      }
+    } catch (e) { console.warn("thread lookup", e); }
+    cache[convKey] = t;
+    return t;
+  }
+
+  async function sweep(force) {
+    if (sweeping || busy || !CFG.addinId || !projects.length) return;
+    const st = lsGet(SWEEP_KEY) || {};
+    if (!force && st.ts && Date.now() - st.ts < SWEEP_EVERY_MIN * 60e3) return;
+    sweeping = true;
+    const now = Date.now();
+    const skip = st.skip || {};   // conversation key or message id -> ts: nothing to file, or it failed
+    Object.keys(skip).forEach((k) => { if (now - skip[k] > SKIP_HOURS * 3600e3) delete skip[k]; });
+    let filed = 0, failed = 0;
+    try {
+      const all = [].concat.apply([], await Promise.all([
+        listRecent("sentitems", "sentDateTime", SWEEP_SENT_DAYS),
+        listRecent("inbox", "receivedDateTime", SWEEP_INBOX_DAYS)
+      ]));
+      const todo = all.filter((x) => !(x.m.categories || []).includes(CFG.filedCategory)
+        && now - new Date(x.when).getTime() > SWEEP_MIN_AGE_MIN * 60e3 && !skip[x.m.id]);
+      const cache = {};
+      for (const x of todo) {
+        if (busy) break; // the user is filing by hand; continue next round
+        let target = null, method = "Thread";
+        const ep = x.sent && (x.m.singleValueExtendedProperties || [])[0];
+        if (ep) {
+          const t = sentTarget(ep.value);
+          if (t && t.none) { skip[x.m.id] = now; continue; }
+          if (t) { target = t; method = "Send"; }
+        }
+        if (!target) {
+          const key = normConv(x.m.conversationId);
+          if (!key || skip[key]) continue;
+          target = await threadTarget(key, cache);
+          if (!target) { skip[key] = now; continue; }
+        }
+        try {
+          await ensureCategories();
+          await fileMessage(x.m.id, target.project, { method, comms: target.comms });
+          filed++;
+        } catch (e) {
+          console.warn("auto-file", x.m.subject, e);
+          skip[x.m.id] = now; failed++;
+        }
+      }
+    } catch (e) {
+      console.warn("sweep", e); failed++;
+    } finally {
+      lsSet(SWEEP_KEY, { ts: Date.now(), skip });
+      sweeping = false;
+    }
+    const info = $("sweepInfo");
+    if (filed || failed) {
+      const t = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      info.textContent = `${t}: auto-filed ${filed} email${filed === 1 ? "" : "s"} (sent with a project or replies in filed threads)` +
+        (failed ? `, ${failed} could not be filed and will be retried later.` : ".");
+      show(info, true);
+    }
+    if (filed && mode === "read") refreshContext(true).catch(console.error);
   }
 
   /* ---------- compose mode ---------- */
@@ -464,16 +621,17 @@
     await officeAsync((cb) => props.saveAsync(cb));
     if (code !== "NONE" && item.conversationId) rememberThread(item.conversationId, code);
     const p = findProject(code);
-    const where = code === "NONE" ? "" : (p.kind === "proposal" ? "04 Com" : "07 Comms");
+    const where = code === "NONE" ? "" : KIND[p.kind].comms();
     status(code === "NONE"
       ? "<b>Ready to send.</b> This email will go out without a project."
-      : `<b>Ready to send.</b> Project ${esc(p.code)} ${esc(p.name)}. It will be filed in ${where} after sending.`);
+      : `<b>Ready to send.</b> ${kindBadge(p.kind)}${esc(p.code)} ${esc(p.name)}. It will be filed in ${esc(where)} after sending, ` +
+        `the next time Fluctuum File is open (keep it pinned to file right away).`);
     showComposeState(code);
     // Banner inside the email, visible even after closing the pane
     try {
       const msg = code === "NONE"
         ? "Fluctuum: no project. Ready to send."
-        : `Fluctuum: ${p.code} ${p.name}. Ready to send, it will be filed after sending.`;
+        : `Fluctuum: ${KIND[p.kind].label} ${p.code} ${p.name}. Filed in ${KIND[p.kind].comms()} after sending.`;
       item.notificationMessages.replaceAsync("fcdProject", {
         type: Office.MailboxEnums.ItemNotificationMessageType.InformationalMessage,
         message: msg.slice(0, 150), icon: "Icon.16", persistent: false
@@ -485,7 +643,7 @@
     const filed = $("filedStatus");
     if (!code) { show(filed, false); return; }
     const p = findProject(code);
-    filed.innerHTML = code === "NONE" ? "No project" : `Project: <b>${esc(code)}</b> ${esc(p ? p.name : "")}`;
+    filed.innerHTML = code === "NONE" ? "No project" : `${kindBadge(kindOf(code))}<b>${esc(code)}</b> ${esc(p ? p.name : "")}`;
     show(filed, true);
   }
 
@@ -556,7 +714,8 @@
 
   Office.onReady(async () => {
     $("search").addEventListener("input", renderList);
-    document.querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => { kindFilter = c.dataset.kind; renderList(); }));
+    document.querySelectorAll(".tab").forEach((c) => c.addEventListener("click", () => setTab(c.dataset.kind)));
+    $("otherHits").addEventListener("click", () => setTab($("otherHits").dataset.kind));
     $("projectList").addEventListener("click", (ev) => {
       const b = ev.target.closest("button[data-code]");
       if (b) onPick(b.dataset.code);
@@ -564,7 +723,7 @@
     $("suggestBtn").addEventListener("click", () => onPick($("suggestBtn").dataset.code));
     $("noProject").addEventListener("click", () => composeSet("NONE").catch((e) => status(esc(e.message), true)));
     $("refresh").addEventListener("click", async () => {
-      try { await loadProjects(true); renderList(); refreshContext(); } catch (e) { status(esc(e.message), true); }
+      try { await loadProjects(true); renderList(); await refreshContext(); sweep(true).catch(console.warn); } catch (e) { status(esc(e.message), true); }
     });
 
     try {
@@ -581,6 +740,8 @@
       renderList();
       await refreshContext();
       $("search").focus();
+      sweep(false).catch(console.warn);
+      setInterval(() => sweep(false).catch(console.warn), 5 * 60e3);
     } catch (e) {
       console.error(e);
       status("Could not start: " + esc(e.message), true);

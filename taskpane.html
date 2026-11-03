@@ -31,14 +31,14 @@
     </section>
 
     <section class="card">
-      <div class="kicker">Project</div>
-      <div class="chips">
-        <button class="chip on" data-kind="all">All</button>
-        <button class="chip" data-kind="project">Projects</button>
-        <button class="chip" data-kind="proposal">Proposals</button>
+      <div class="tabs" role="tablist">
+        <button class="tab on" role="tab" data-kind="project">Projects <span class="count" id="countProject"></span></button>
+        <button class="tab" role="tab" data-kind="proposal">Proposals <span class="count" id="countProposal"></span></button>
       </div>
-      <input id="search" type="search" placeholder="Search code or name" autocomplete="off">
+      <div class="muted small dest" id="destInfo"></div>
+      <input id="search" type="search" placeholder="Search project code or name" autocomplete="off">
       <ul id="projectList" class="list"></ul>
+      <button id="otherHits" class="link-inline hidden"></button>
       <div class="muted small" id="listInfo"></div>
     </section>
 
@@ -47,6 +47,7 @@
     </section>
 
     <section id="status" class="status hidden"></section>
+    <div id="sweepInfo" class="muted small hidden"></div>
   </main>
 
   <script src="taskpane.js"></script>
