@@ -4,8 +4,6 @@
  * from a known thread or a project code in the subject. If nothing fits, ask the user.
  */
 /* eslint-disable no-var */
-var FCD_INTERNAL_DOMAIN = "fluctuum.com";
-
 function fcdNormConv(id) {
   return id ? String(id).replace(/\//g, "-").replace(/\+/g, "_") : "";
 }
@@ -36,16 +34,6 @@ function fcdSetAndAllow(event, props, code, how) {
     if (comms) props.set("comms", comms);
   } catch (e) { /* ignore */ }
   props.saveAsync(function () { fcdAllow(event); });
-}
-
-function fcdAllInternal(recipients) {
-  if (!FCD_INTERNAL_DOMAIN) return false;
-  if (!recipients.length) return false;
-  for (var i = 0; i < recipients.length; i++) {
-    var a = (recipients[i].emailAddress || "").toLowerCase();
-    if (a.slice(-FCD_INTERNAL_DOMAIN.length - 1) !== "@" + FCD_INTERNAL_DOMAIN) return false;
-  }
-  return true;
 }
 
 function onMessageSendHandler(event) {
@@ -80,14 +68,8 @@ function onMessageSendHandler(event) {
             return;
           }
         }
-        // 3. Internal only emails go out without asking
-        item.to.getAsync(function (t) {
-          item.cc.getAsync(function (c) {
-            var all = ((t && t.value) || []).concat((c && c.value) || []);
-            if (fcdAllInternal(all)) { finish(function () { fcdAllow(event); }); return; }
-            finish(function () { fcdAsk(event); });
-          });
-        });
+        // 3. Ask, internal emails included
+        finish(function () { fcdAsk(event); });
       });
     });
   } catch (e) {
