@@ -9,7 +9,7 @@
   const CFG = window.FCD_CONFIG;
   const GRAPH = "https://graph.microsoft.com/v1.0";
   const SCOPES = ["User.Read", "Mail.ReadWrite", "Sites.ReadWrite.All", "MailboxSettings.ReadWrite"];
-  const CACHE_KEY = "fcd.projects.v3";
+  const CACHE_KEY = "fcd.projects.v4";
   const CACHE_HOURS = 6;
   const SIMPLE_UPLOAD_MAX = 4 * 1024 * 1024 - 1024;
   const CHUNK = 320 * 1024 * 10; // 3.2 MB, multiple of 320 KiB as Graph requires
@@ -155,17 +155,44 @@
     return [].concat.apply([], perYear);
   }
 
+  // Internal (Fluctuum's own email, no project): Internal/<NN Name>, filed straight into that folder.
+  // Defaults always show; folders added by hand in SharePoint show too. Code: INT-<first word>.
+  const INTERNAL_ROOT = CFG.internalRoot || "Internal";
+  const INTERNAL_FOLDERS = CFG.internalFolders || [
+    "01 Leads & Prospects", "02 Partners & Consultants", "03 Vendors & Suppliers", "04 Finance & Accounting",
+    "05 HR & Recruiting", "06 Legal & Insurance", "07 Marketing & Events", "08 Operations & IT", "09 General"
+  ];
+  async function listInternal() {
+    let names = INTERNAL_FOLDERS.slice();
+    try {
+      (await graphAll(`/drives/${CFG.driveId}/root:/${encPath(INTERNAL_ROOT)}:/children?$select=name,folder&$top=999`))
+        .filter((f) => f.folder && !names.includes(f.name)).forEach((f) => names.push(f.name));
+    } catch (e) { if (e.status !== 404) throw e; }
+    const seen = {};
+    return names.sort().map((n) => {
+      const name = n.replace(/^\d+\s*[-_.]?\s*/, "");
+      const code = "INT-" + (name.split(/[^A-Za-z0-9]+/)[0] || "X").toUpperCase();
+      if (seen[code]) return null;
+      seen[code] = true;
+      return { code, name, year: "", kind: "internal", path: `${INTERNAL_ROOT}/${n}` };
+    }).filter(Boolean);
+  }
+
   async function loadProjects(force) {
     const cached = lsGet(CACHE_KEY);
     if (!force && cached && Date.now() - cached.ts < CACHE_HOURS * 3600e3 && cached.list.length) {
       projects = cached.list;
       return;
     }
-    $("listInfo").textContent = "Loading projects and proposals from FCD…";
-    const all = [].concat.apply([], await Promise.all(SOURCES.map(listSource)));
+    $("listInfo").textContent = "Loading projects, proposals and internal folders from FCD…";
+    const [all, internal] = await Promise.all([
+      Promise.all(SOURCES.map(listSource)).then((r) => [].concat.apply([], r)),
+      listInternal()
+    ]);
     const seen = {};
     projects = all.filter((p) => (seen[p.code] ? false : (seen[p.code] = true)))
-      .sort((a, b) => (b.year + b.code.replace(/^P/, "")).localeCompare(a.year + a.code.replace(/^P/, "")) || a.kind.localeCompare(b.kind));
+      .sort((a, b) => (b.year + b.code.replace(/^P/, "")).localeCompare(a.year + a.code.replace(/^P/, "")) || a.kind.localeCompare(b.kind))
+      .concat(internal);
     lsSet(CACHE_KEY, { ts: Date.now(), list: projects });
     saveCodesToRoaming();
   }
@@ -178,7 +205,7 @@
       // Folder paths for recent projects and all proposals, so the send handler can tag the email with its folder
       const minYear = String(new Date().getFullYear() - 2);
       const paths = {};
-      projects.filter((p) => p.kind === "proposal" || p.year >= minYear).forEach((p) => { paths[p.code] = p.path; });
+      projects.filter((p) => p.kind !== "project" || p.year >= minYear).forEach((p) => { paths[p.code] = p.path; });
       rs.set("paths", paths);
       rs.saveAsync(() => {});
     } catch (e) { /* ignore */ }
@@ -201,16 +228,21 @@
 
   function findProject(code) { return projects.find((p) => p.code === code) || null; }
 
-  // Projects and proposals live in different trees and file to different folders; never mix them in one list.
+  // Projects, proposals and internal folders live in different trees and file to different folders; never mix them in one list.
   const KIND = {
     project: { label: "Project", plural: "Projects", root: () => CFG.projectsRoot, comms: () => CFG.commsFolder },
-    proposal: { label: "Proposal", plural: "Proposals", root: () => CFG.proposalsRoot || "Proposals", comms: () => CFG.proposalCommsFolder || "04 Com" }
+    proposal: { label: "Proposal", plural: "Proposals", root: () => CFG.proposalsRoot || "Proposals", comms: () => CFG.proposalCommsFolder || "04 Com" },
+    internal: { label: "Internal", plural: "Internal folders", root: () => INTERNAL_ROOT, comms: () => "" }
   };
-  function kindOf(code) { return /^P/i.test(code || "") ? "proposal" : "project"; }
+  function kindOf(code) { return /^INT-/i.test(code || "") ? "internal" : /^P/i.test(code || "") ? "proposal" : "project"; }
   function kindBadge(kind) { return `<span class="kind ${kind}">${KIND[kind].label}</span>`; }
+  // Where an email of this project ends up, for messages: "07 Comms", "04 Com" or "Internal/01 Leads & Prospects"
+  function whereOf(p) { return p.kind === "internal" ? p.path : KIND[p.kind].comms(); }
+  // Internal folders have no code worth showing; projects and proposals show "code name"
+  function labelOf(code, name) { return kindOf(code) === "internal" ? (name || code) : code + (name ? " " + name : ""); }
 
   const TAB_KEY = "fcd.tab";
-  let kindFilter = lsGet(TAB_KEY) === "proposal" ? "proposal" : "project";
+  let kindFilter = KIND[lsGet(TAB_KEY)] ? lsGet(TAB_KEY) : "project";
   function setTab(kind) {
     if (!KIND[kind]) return;
     kindFilter = kind; lsSet(TAB_KEY, kind);
@@ -226,26 +258,35 @@
     const shown = hits.slice(0, 80);
     let html = "", lastYear = null;
     shown.forEach((p) => {
-      if (p.year !== lastYear) { html += `<li class="year">${esc(p.year)}</li>`; lastYear = p.year; }
-      html += `<li><button class="project" data-code="${esc(p.code)}"><span class="code">${esc(p.code)}</span>${esc(p.name)}</button></li>`;
+      if (p.year && p.year !== lastYear) { html += `<li class="year">${esc(p.year)}</li>`; lastYear = p.year; }
+      const code = p.kind === "internal" ? "" : `<span class="code">${esc(p.code)}</span>`;
+      html += `<li><button class="project" data-code="${esc(p.code)}">${code}${esc(p.name)}</button></li>`;
     });
     const K = KIND[kindFilter];
     ul.innerHTML = html || `<li class="muted small">No ${K.plural.toLowerCase()} match.</li>`;
 
-    // Point to the other tab when the search finds things there
-    const other = kindFilter === "project" ? "proposal" : "project";
-    const otherHits = q ? projects.filter((p) => p.kind === other && match(p)).length : 0;
+    // Point to the tab with the most hits when the search finds things elsewhere
+    let other = null, otherHits = 0;
+    if (q) Object.keys(KIND).filter((k) => k !== kindFilter).forEach((k) => {
+      const c = projects.filter((p) => p.kind === k && match(p)).length;
+      if (c > otherHits) { other = k; otherHits = c; }
+    });
     const ob = $("otherHits");
-    ob.dataset.kind = other;
-    ob.textContent = `${otherHits} match${otherHits === 1 ? "" : "es"} in ${KIND[other].plural} →`;
+    if (other) {
+      ob.dataset.kind = other;
+      ob.textContent = `${otherHits} match${otherHits === 1 ? "" : "es"} in ${KIND[other].plural} →`;
+    }
     show(ob, otherHits > 0);
 
     const n = (k) => projects.filter((p) => p.kind === k).length;
     $("countProject").textContent = n("project") || "";
     $("countProposal").textContent = n("proposal") || "";
-    $("destInfo").innerHTML = `${esc(K.root())}/&lt;year&gt;/… → files into <b>${esc(K.comms())}</b>`;
+    $("countInternal").textContent = n("internal") || "";
+    $("destInfo").innerHTML = kindFilter === "internal"
+      ? `Fluctuum's own email, no project → files into <b>${esc(K.root())}/&lt;folder&gt;</b>`
+      : `${esc(K.root())}/&lt;year&gt;/… → files into <b>${esc(K.comms())}</b>`;
     $("listInfo").textContent = hits.length > shown.length ? `Showing ${shown.length} of ${hits.length}. Type to narrow down.` : "";
-    $("search").placeholder = `Search ${K.label.toLowerCase()} code or name`;
+    $("search").placeholder = kindFilter === "internal" ? "Search internal folder" : `Search ${K.label.toLowerCase()} code or name`;
     document.querySelectorAll(".tab").forEach((c) => {
       c.classList.toggle("on", c.dataset.kind === kindFilter);
       c.setAttribute("aria-selected", c.dataset.kind === kindFilter ? "true" : "false");
@@ -304,8 +345,8 @@
     show($("suggestBox"), !!p);
     if (p) {
       $("suggestBtn").dataset.code = p.code;
-      $("suggestBtn").innerHTML = `${kindBadge(p.kind)}<span class="code">${esc(p.code)}</span>${esc(p.name)}`;
-      $("suggestWhy").textContent = `${s.why} Files into ${KIND[p.kind].comms()}.`;
+      $("suggestBtn").innerHTML = kindBadge(p.kind) + (p.kind === "internal" ? "" : `<span class="code">${esc(p.code)}</span>`) + esc(p.name);
+      $("suggestWhy").textContent = `${s.why} Files into ${whereOf(p)}.`;
       // Open the matching tab so the list shows the same kind as the suggestion
       if (p.kind !== kindFilter && !$("search").value.trim()) setTab(p.kind);
     }
@@ -313,7 +354,7 @@
     if (s.filedIn && s.filedIn.length) {
       filed.innerHTML = "Already filed in " + s.filedIn.map((r) => {
         const pr = findProject(r.Project);
-        const label = kindBadge(kindOf(r.Project)) + esc(r.Project + (pr ? " " + pr.name : ""));
+        const label = kindBadge(kindOf(r.Project)) + esc(labelOf(r.Project, pr ? pr.name : r.ProjectName));
         return r.FileUrl ? `<a href="${esc(r.FileUrl)}" target="_blank">${label}</a>` : label;
       }).join(", ");
       show(filed, true);
@@ -364,6 +405,10 @@
     if (commsCache[project.path]) return commsCache[project.path];
     const def = project.kind === "proposal" ? (CFG.proposalCommsFolder || "04 Com") : CFG.commsFolder;
     let name = null;
+    if (project.kind === "internal") {
+      commsCache[project.path] = project.path; // the folder itself; the upload creates it if missing
+      return project.path;
+    }
     try {
       const kids = (await graphAll(`/drives/${CFG.driveId}/root:/${encPath(project.path)}:/children?$select=name,folder&$top=999`))
         .filter((f) => f.folder).map((f) => f.name);
@@ -526,7 +571,7 @@
     const p = findProject(v.project);
     if (p) return { project: p, comms: null };
     const kind = kindOf(v.project);
-    const comms = v.comms || (v.folder ? `${v.folder}/${KIND[kind].comms()}` : null);
+    const comms = v.comms || (v.folder ? (kind === "internal" ? v.folder : `${v.folder}/${KIND[kind].comms()}`) : null);
     return comms ? { project: { code: v.project, name: v.projectName || "", kind, path: v.folder || "" }, comms } : null;
   }
 
@@ -621,17 +666,19 @@
     await officeAsync((cb) => props.saveAsync(cb));
     if (code !== "NONE" && item.conversationId) rememberThread(item.conversationId, code);
     const p = findProject(code);
-    const where = code === "NONE" ? "" : KIND[p.kind].comms();
+    const where = code === "NONE" ? "" : whereOf(p);
     status(code === "NONE"
       ? "<b>Ready to send.</b> This email will go out without a project."
-      : `<b>Ready to send.</b> ${kindBadge(p.kind)}${esc(p.code)} ${esc(p.name)}. It will be filed in ${esc(where)} after sending, ` +
+      : `<b>Ready to send.</b> ${kindBadge(p.kind)}${esc(labelOf(p.code, p.name))}. It will be filed in ${esc(where)} after sending, ` +
         `the next time Fluctuum File is open (keep it pinned to file right away).`);
     showComposeState(code);
     // Banner inside the email, visible even after closing the pane
     try {
       const msg = code === "NONE"
         ? "Fluctuum: no project. Ready to send."
-        : `Fluctuum: ${KIND[p.kind].label} ${p.code} ${p.name}. Filed in ${KIND[p.kind].comms()} after sending.`;
+        : p.kind === "internal"
+          ? `Fluctuum: Internal, ${p.name}. Filed in ${p.path} after sending.`
+          : `Fluctuum: ${KIND[p.kind].label} ${p.code} ${p.name}. Filed in ${KIND[p.kind].comms()} after sending.`;
       item.notificationMessages.replaceAsync("fcdProject", {
         type: Office.MailboxEnums.ItemNotificationMessageType.InformationalMessage,
         message: msg.slice(0, 150), icon: "Icon.16", persistent: false
@@ -643,7 +690,7 @@
     const filed = $("filedStatus");
     if (!code) { show(filed, false); return; }
     const p = findProject(code);
-    filed.innerHTML = code === "NONE" ? "No project" : `${kindBadge(kindOf(code))}<b>${esc(code)}</b> ${esc(p ? p.name : "")}`;
+    filed.innerHTML = code === "NONE" ? "No project" : kindOf(code) === "internal" ? `${kindBadge("internal")}<b>${esc(p ? p.name : code)}</b>` : `${kindBadge(kindOf(code))}<b>${esc(code)}</b> ${esc(p ? p.name : "")}`;
     show(filed, true);
   }
 

@@ -77,7 +77,7 @@ button { font: inherit; cursor: pointer; border-radius: 0; }
 .status a { color: var(--accent); }
 .year { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--muted); padding: 8px 4px 2px; }
 .tabs { display: flex; border-bottom: 1px solid var(--border); margin: -10px -10px 8px; }
-.tab { flex: 1; font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+.tab { flex: 1; font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
   padding: 9px 6px 7px; background: none; color: var(--muted); border: 0; border-bottom: 3px solid transparent; }
 .tab:hover { color: var(--text); }
 .tab.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
@@ -87,4 +87,5 @@ button { font: inherit; cursor: pointer; border-radius: 0; }
   text-transform: uppercase; padding: 1px 5px; margin-right: 6px; border: 1px solid var(--border); color: var(--muted);
   vertical-align: 1px; }
 .kind.proposal { border-color: var(--accent); color: var(--accent); }
+.kind.internal { border-color: var(--text); background: var(--text); color: #fff; }
 .link-inline { background: none; border: 0; padding: 6px 4px 0; color: var(--accent); text-decoration: underline; font-size: 12px; }

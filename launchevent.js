@@ -11,8 +11,8 @@ function fcdNormConv(id) {
 function fcdAsk(event) {
   event.completed({
     allowEvent: false,
-    errorMessage: "Which project or proposal does this email belong to? Choose one in Fluctuum File so it is filed after sending (project: 07 Comms, proposal: 04 Com), or send it without one.",
-    errorMessageMarkdown: "**Which project or proposal does this email belong to?**\n\nChoose one in Fluctuum File so it is filed after sending (projects in **07 Comms**, proposals in **04 Com**), or select **Send Anyway** to send it without one.",
+    errorMessage: "Which project, proposal or internal folder does this email belong to? Choose one in Fluctuum File so it is filed after sending, or send it without one.",
+    errorMessageMarkdown: "**Which project, proposal or internal folder does this email belong to?**\n\nChoose one in Fluctuum File so it is filed after sending (projects in **07 Comms**, proposals in **04 Com**, Fluctuum's own email in **Internal**), or select **Send Anyway** to send it without one.",
     cancelLabel: "Choose",
     commandId: "msgComposeOpenPaneButton",
     sendModeOverride: Office.MailboxEnums.SendModeOverride.PromptUser
@@ -30,7 +30,7 @@ function fcdSetAndAllow(event, props, code, how) {
     var rs = Office.context.roamingSettings;
     var cp = (rs && rs.get("cpath")) || {};
     var paths = (rs && rs.get("paths")) || {};
-    var comms = cp[code] || (paths[code] ? paths[code] + "/" + (code.charAt(0) === "P" ? "04 Com" : "07 Comms") : "");
+    var comms = cp[code] || (!paths[code] ? "" : /^INT-/.test(code) ? paths[code] : paths[code] + "/" + (code.charAt(0) === "P" ? "04 Com" : "07 Comms"));
     if (comms) props.set("comms", comms);
   } catch (e) { /* ignore */ }
   props.saveAsync(function () { fcdAllow(event); });
