@@ -164,10 +164,25 @@
   ];
   async function listInternal() {
     let names = INTERNAL_FOLDERS.slice();
+    let existing = [];
     try {
-      (await graphAll(`/drives/${CFG.driveId}/root:/${encPath(INTERNAL_ROOT)}:/children?$select=name,folder&$top=999`))
-        .filter((f) => f.folder && !names.includes(f.name)).forEach((f) => names.push(f.name));
-    } catch (e) { if (e.status !== 404) throw e; }
+      existing = (await graphAll(`/drives/${CFG.driveId}/root:/${encPath(INTERNAL_ROOT)}:/children?$select=name,folder&$top=999`))
+        .filter((f) => f.folder).map((f) => f.name);
+      existing.filter((n) => !names.includes(n)).forEach((n) => names.push(n));
+    } catch (e) {
+      if (e.status !== 404) throw e;
+      existing = null;
+    }
+    // Create the default folders so the team sees them in the FCD before anything is filed
+    const missing = INTERNAL_FOLDERS.filter((n) => !existing || !existing.includes(n));
+    if (missing.length) {
+      const mk = (parent, name) => graph(parent, { method: "POST", json: { name, folder: {}, "@microsoft.graph.conflictBehavior": "fail" } })
+        .catch((e) => { if (e.status !== 409) console.warn("create folder", name, e); });
+      try {
+        if (!existing) await mk(`/drives/${CFG.driveId}/root/children`, INTERNAL_ROOT);
+        await Promise.all(missing.map((n) => mk(`/drives/${CFG.driveId}/root:/${encPath(INTERNAL_ROOT)}:/children`, n)));
+      } catch (e) { console.warn("internal folders", e); }
+    }
     const seen = {};
     return names.sort().map((n) => {
       const name = n.replace(/^\d+\s*[-_.]?\s*/, "");
