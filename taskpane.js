@@ -162,27 +162,31 @@
     "01 Leads & Prospects", "02 Partners & Consultants", "03 Vendors & Suppliers", "04 Finance & Accounting",
     "05 HR & Recruiting", "06 Legal & Insurance", "07 Marketing & Events", "08 Operations & IT", "09 General"
   ];
+  async function internalExisting() {
+    try {
+      return (await graphAll(`/drives/${CFG.driveId}/root:/${encPath(INTERNAL_ROOT)}:/children?$select=name,folder&$top=999`))
+        .filter((f) => f.folder).map((f) => f.name);
+    } catch (e) { if (e.status === 404) return null; throw e; }
+  }
+
+  // Create the default folders so the team sees them in the FCD before anything is filed.
+  // Runs on every pane load (at most once a day), independent of the cached project list.
+  const INTERNAL_KEY = "fcd.internal.v1";
+  async function ensureInternalFolders() {
+    if (Date.now() - (lsGet(INTERNAL_KEY) || 0) < 24 * 3600e3) return;
+    const existing = await internalExisting();
+    const missing = INTERNAL_FOLDERS.filter((n) => !existing || !existing.includes(n));
+    const mk = (parent, name) => graph(parent, { method: "POST", json: { name, folder: {}, "@microsoft.graph.conflictBehavior": "fail" } })
+      .catch((e) => { if (e.status !== 409) throw e; });
+    if (!existing) await mk(`/drives/${CFG.driveId}/root/children`, INTERNAL_ROOT);
+    await Promise.all(missing.map((n) => mk(`/drives/${CFG.driveId}/root:/${encPath(INTERNAL_ROOT)}:/children`, n)));
+    lsSet(INTERNAL_KEY, Date.now());
+  }
+
   async function listInternal() {
     let names = INTERNAL_FOLDERS.slice();
-    let existing = [];
-    try {
-      existing = (await graphAll(`/drives/${CFG.driveId}/root:/${encPath(INTERNAL_ROOT)}:/children?$select=name,folder&$top=999`))
-        .filter((f) => f.folder).map((f) => f.name);
-      existing.filter((n) => !names.includes(n)).forEach((n) => names.push(n));
-    } catch (e) {
-      if (e.status !== 404) throw e;
-      existing = null;
-    }
-    // Create the default folders so the team sees them in the FCD before anything is filed
-    const missing = INTERNAL_FOLDERS.filter((n) => !existing || !existing.includes(n));
-    if (missing.length) {
-      const mk = (parent, name) => graph(parent, { method: "POST", json: { name, folder: {}, "@microsoft.graph.conflictBehavior": "fail" } })
-        .catch((e) => { if (e.status !== 409) console.warn("create folder", name, e); });
-      try {
-        if (!existing) await mk(`/drives/${CFG.driveId}/root/children`, INTERNAL_ROOT);
-        await Promise.all(missing.map((n) => mk(`/drives/${CFG.driveId}/root:/${encPath(INTERNAL_ROOT)}:/children`, n)));
-      } catch (e) { console.warn("internal folders", e); }
-    }
+    const existing = await internalExisting();
+    if (existing) existing.filter((n) => !names.includes(n)).forEach((n) => names.push(n));
     const seen = {};
     return names.sort().map((n) => {
       const name = n.replace(/^\d+\s*[-_.]?\s*/, "");
@@ -785,6 +789,7 @@
     $("suggestBtn").addEventListener("click", () => onPick($("suggestBtn").dataset.code));
     $("noProject").addEventListener("click", () => composeSet("NONE").catch((e) => status(esc(e.message), true)));
     $("refresh").addEventListener("click", async () => {
+      lsSet(INTERNAL_KEY, 0); ensureInternalFolders().catch((e) => console.warn("internal folders", e));
       try { await loadProjects(true); renderList(); await refreshContext(); sweep(true).catch(console.warn); } catch (e) { status(esc(e.message), true); }
     });
 
@@ -802,6 +807,7 @@
       renderList();
       await refreshContext();
       $("search").focus();
+      ensureInternalFolders().catch((e) => console.warn("internal folders", e));
       sweep(false).catch(console.warn);
       setInterval(() => sweep(false).catch(console.warn), 5 * 60e3);
     } catch (e) {
